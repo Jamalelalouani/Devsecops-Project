@@ -16,7 +16,6 @@ ARG PROJECT_USERNAME="SI5"
 
 ENV VERSION="${TAG}"
 
-RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 # Metadata
 LABEL maintainer="${PROJECT_USERNAME}" \
       org.opencontainers.image.authors="${PROJECT_USERNAME}" \
