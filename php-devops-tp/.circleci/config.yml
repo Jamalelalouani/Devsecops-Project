@@ -34,7 +34,6 @@ version: 2.1
 #  2. Suffixes based on the specific tool or task:
 #  For example, for a job that uses PHP_CodeSniffer, use phpcs as a suffix.
 
-
 # Default configuration for persist_to_workspace and attach_workspace commands
 persist_to_workspace: &persist_to_workspace
   persist_to_workspace:
@@ -48,27 +47,26 @@ attach_workspace: &attach_workspace
     at: ~/project
 
 # This main executor is used by all jobs unless otherwise specified
+# containers pour exécuter des jobs
 executors:
   php-executor:
     resource_class: small
     shell: /bin/bash
     docker:
       - name: localhost
-        image: cimg/php:8.1
+        image: cimg/php:8.2
   builder-executor:
     resource_class: small
     shell: /bin/bash
     docker:
-      - image: cimg/php:8.1-node
+      - image: cimg/php:8.2-node
         name: localhost
-  simple-executor:
+  simple-executor: # container le plus simple
     resource_class: small
     shell: /bin/bash
     docker:
       - image: cimg/base:stable
         name: localhost
-
-
 
 jobs:
   debug-info:
@@ -94,7 +92,7 @@ jobs:
       - restore_cache:
           keys:
             # "composer.lock" can be used if it is committed to the repo
-            - v1-dependencies-{{ checksum "~/Devsecops-Project/php-devops-tp/composer.lock" }}
+            - v1-dependencies-{{ checksum "composer.json" }}
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
       - run:
@@ -103,9 +101,8 @@ jobs:
       - save_cache:
           paths:
             - ./vendor
-          key: v1-dependencies-{{ checksum "~/Devsecops-Project/php-devops-tp/composer.lock" }}
+          key: v1-dependencies-{{ checksum "composer.json" }}
       - *persist_to_workspace
-
 
   lint-phpcs:
     executor: php-executor
@@ -113,7 +110,7 @@ jobs:
       - *attach_workspace
       - run:
           name: Install PHP_CodeSniffer and PHPCompatibility
-          command: composer require --dev "squizlabs/php_codesniffer=*" "phpcompatibility/php-compatibility=*"
+          command: composer require --dev "squizlabs/php_codesniffer=" "phpcompatibility/php-compatibility="
       - run:
           name: Run PHP_CodeSniffer with Custom Ruleset in the project root
           command: |
@@ -127,8 +124,6 @@ jobs:
       - store_artifacts:
           path: phpcs-report.txt
           destination: phpcs-report
-
-
 
   security-check-dependencies:
     executor: php-executor
@@ -145,8 +140,6 @@ jobs:
       - store_artifacts:
           path: security-report.json
           destination: security-report
-
-
 
   test-phpunit:
     executor: php-executor
@@ -167,6 +160,77 @@ jobs:
           name: Run PHPUnit
           command: ./vendor/bin/phpunit --testsuite=Unit
 
+  phpmetrics-evaluation:
+    executor: php-executor
+    steps:
+      - *attach_workspace
+      - run:
+          name: Install PHPMetrics
+          command: composer require --dev phpmetrics/phpmetrics
+      - run:
+          name: Run PHPMetrics
+          command: ./vendor/bin/phpmetrics --report-html=phpmetrics-report.html .
+      - store_artifacts:
+          path: phpmetrics-report.html
+          destination: phpmetrics-report
+
+  # phploc-evaluation:
+  #   executor: php-executor
+  #   steps:
+  #     - *attach_workspace
+  #     - run:
+  #         name: Install PHPLOC
+  #         command: composer require --dev phploc/phploc
+  #     - run:
+  #         name: Run PHPLOC
+  #         command: ./vendor/bin/phploc --log-xml=phploc-report.xml .
+  #     - store_artifacts:
+  #         path: phploc-report.xml
+  #         destination: phploc-report
+
+  phpmd:
+    executor: php-executor
+    steps:
+      - checkout
+      - run:
+          name: Install Composer Dependencies
+          command: composer require --dev phpmd/phpmd
+      - run:
+          name: Run PHPMD
+          command: |
+            ./vendor/bin/phpmd ./src xml cleancode,codesize,design,unusedcode,naming
+  
+  php-doc-check:
+    executor: php-executor
+    steps:
+      - checkout
+      - run:
+          name: Install Dependencies
+          command: composer require --dev niels-de-blaauw/php-doc-check
+      - run:
+          name: Run php-doc-check
+          command: ./vendor/bin/php-doc-check ./src
+
+  infisical-setup:
+    executor: simple-executor
+    steps:
+      - checkout
+      - run:
+          name: Install Infisical CLI
+          command: |
+            sudo apt-get install -y bash curl \
+            && sudo curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo bash \
+            && sudo apt-get update \
+            && sudo apt-get install -y infisical
+      - run:
+          name: Retrieve Infisical Secret
+          command: |
+            export INFISICAL_SECRET=$(infisical get-secret --token $INFISICAL_PAT --secret-name APP_SECRET)
+            echo "APP_SECRET=$INFISICAL_SECRET" > .env
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .env
 
   build-docker-image:
     executor: builder-executor
@@ -185,7 +249,8 @@ jobs:
             fi
 
             # Sanitize the repository name and branch name
-            REPOSITORY=$(echo "ghcr.io/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME" | tr '[:upper:]' '[:lower:]' | tr -d '_')
+            # REPOSITORY=$(echo "ghcr.io/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME" | tr '[:upper:]' '[:lower:]' | tr -d '_')
+            REPOSITORY=$(echo "ghcr.io/$GHCR_USERNAME/$CIRCLE_PROJECT_REPONAME" | tr '[:upper:]' '[:lower:]' | tr -d '_')
             TAG=$(echo $CIRCLE_BRANCH | tr '[:upper:]' '[:lower:]' | tr '/' '-' | tr -cd '[:alnum:]._-' | cut -c 1-128)
 
             # Login to GHCR
@@ -193,7 +258,7 @@ jobs:
 
             # Build the Docker image
             docker build \
-            -f docker/Dockerfile \
+            -f Docker/Dockerfile \
             -t $REPOSITORY:$TAG \
             --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
             --build-arg TAG="${TAG}" \
@@ -201,12 +266,12 @@ jobs:
             --build-arg GIT_URL=$(echo ${CIRCLE_REPOSITORY_URL} | sed -e 's/^git@/https:\/\//g' -e 's/\.git$//g' -e 's/:/\//g') \
             --build-arg SQLITE_VERSION=3430200 \
             --build-arg SQLITE_YEAR=2023 \
-            --build-arg PROJECT_USERNAME=$CIRCLE_PROJECT_USERNAME \
+            # --build-arg PROJECT_USERNAME=$CIRCLE_PROJECT_USERNAME \
+            --build-arg PROJECT_USERNAME=$GHCR_USERNAME \
             .
 
             # Push the Docker image
             docker push $REPOSITORY:$TAG
-
 
   deploy-ssh-staging:
     executor: simple-executor
@@ -226,16 +291,21 @@ jobs:
             (flock -w 10 9 || exit 1; sudo -S service php${PHP_FPM_VERSION}-fpm restart ) 9>/tmp/fpm.lock
             EOF
 
-
-#  deploy-ssh-production:
 # It's up to you :)
-
+# deploy-ssh-production:
+#     depends_on:
+#       - build-setup
+#     steps:
+#       - run:
+#           name: Deploy to production via SSH
+#           command: ssh -t user@production-server "sudo deploy.sh"
 
 workflows:
   main_workflow:
     jobs:
       - debug-info
       - build-setup
+
       - lint-phpcs:
           requires:
             - build-setup
@@ -245,30 +315,57 @@ workflows:
       - test-phpunit:
           requires:
             - build-setup
+      - phpmetrics-evaluation:
+          requires:
+            - build-setup
+      # - phploc-evaluation:
+      #     requires:
+      #       - build-setup
+      - phpmd:
+          requires:
+            - build-setup
+      - php-doc-check:
+          requires:
+            - build-setup
+      
+      
+
       - hold:
           type: approval
+          requires:
+            - lint-phpcs
+            - security-check-dependencies
+            - test-phpunit
+            - phpmetrics-evaluation
+            - phpmd
+            - php-doc-check
           filters:
             branches:
               only:
                 - main
                 - master
                 - /^release\/.*/
-      - deploy-ssh-production:
-          requires:
-              - hold
-          filters:
-            branches:
-              only:
-                - main
-                - master
+
+      # - deploy-ssh-production:
+      #     requires:
+      #         - hold
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
+      #           - master
       - deploy-ssh-staging:
           requires:
             - hold
           filters:
             branches:
               only:
+                - main
                 - /^release\/.*/
-
+      
+      - infisical-setup:
+          requires:
+            - hold
 
   container_workflow:
     jobs:
@@ -282,4 +379,4 @@ workflows:
                 - /^feature\/.*/
                 - /^release\/.*/
                 - /^hotfix\/.*/
-                - /^bugfix\/.*/
+                - /^bugfix\/.*/
