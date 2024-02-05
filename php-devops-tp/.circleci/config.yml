@@ -44,7 +44,7 @@ persist_to_workspace: &persist_to_workspace
 attach_workspace: &attach_workspace
   attach_workspace:
     # Must be absolute path or relative path from working_directory
-    at: ~/project
+    at: ~/Devsecops-Project
 
 # This main executor is used by all jobs unless otherwise specified
 # containers pour exécuter des jobs
