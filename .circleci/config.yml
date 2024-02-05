@@ -255,7 +255,7 @@ jobs:
             TAG=$(echo $CIRCLE_BRANCH | tr '[:upper:]' '[:lower:]' | tr '/' '-' | tr -cd '[:alnum:]._-' | cut -c 1-128)
 
             # Login to GHCR
-            echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            echo "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" | docker login ghcr.io -u "Jamalelalouani" --password-stdin
 
             # Build the Docker image
             docker build \
