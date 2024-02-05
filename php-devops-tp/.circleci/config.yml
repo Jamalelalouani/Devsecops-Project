@@ -92,16 +92,20 @@ jobs:
       - restore_cache:
           keys:
             # "composer.lock" can be used if it is committed to the repo
-            - v1-dependencies-{{ checksum "~/Devsecops-Project/php-devops-tp/composer.lock" }}
+            - v1-dependencies-{{ checksum "composer.json" }}
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
+      - run:
+          name: Debug Files
+          command: |
+            ls -la ~/Devsecops-Project/php-devops-tp
       - run:
           name: Install dependencies
           command: composer install --no-interaction --no-ansi --prefer-dist
       - save_cache:
           paths:
             - ./vendor
-          key: v1-dependencies-{{ checksum "~/Devsecops-Project/php-devops-tp/composer.json" }}
+          key: v1-dependencies-{{ checksum "composer.json" }}
       - *persist_to_workspace
 
   lint-phpcs:
