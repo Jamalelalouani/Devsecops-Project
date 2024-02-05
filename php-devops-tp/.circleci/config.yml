@@ -44,7 +44,7 @@ persist_to_workspace: &persist_to_workspace
 attach_workspace: &attach_workspace
   attach_workspace:
     # Must be absolute path or relative path from working_directory
-    at: ~/Devsecops-Project/php-devops-tp/
+    at: ~/project/php-devops-tp
 
 # This main executor is used by all jobs unless otherwise specified
 # containers pour exécuter des jobs
@@ -95,10 +95,7 @@ jobs:
             - v1-dependencies-{{ checksum "composer.json" }}
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
-      - run:
-          name: Debug Files
-          command: |
-            ls -la ~/Devsecops-Project/php-devops-tp
+    
       - run:
           name: Install dependencies
           command: composer install --no-interaction --no-ansi --prefer-dist
