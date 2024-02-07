@@ -316,9 +316,7 @@ workflows:
       - test-phpunit:
           requires:
             - build-setup
-       - infisical-setup:
-          requires:
-            - build-setup
+       
             
       - phpmetrics-evaluation:
           requires:
