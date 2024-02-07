@@ -96,4 +96,4 @@ RUN chown -R www-data:www-data /var/www/html
 WORKDIR /var/www/html
 
 # Exposez le port 80
-EXPOSE 80
+# EXPOSE 80
